@@ -39,6 +39,7 @@ import 'utils/matrix_file.dart';
 import 'utils/room_update.dart';
 import 'utils/to_device_event.dart';
 import 'utils/uia_request.dart';
+import 'utils/lock.dart';
 
 typedef RoomSorter = int Function(Room a, Room b);
 
@@ -1753,6 +1754,8 @@ sort order of ${prevState.sortOrder}. This should never happen...''');
     return;
   }
 
+  final Lock<DeviceKeys> _sendToDeviceEncryptedLock = Lock();
+
   /// Sends an encrypted [message] of this [type] to these [deviceKeys].
   Future<void> sendToDeviceEncrypted(
     List<DeviceKeys> deviceKeys,
@@ -1772,13 +1775,27 @@ sort order of ${prevState.sortOrder}. This should never happen...''');
       if (deviceKeys.isEmpty) return;
     }
 
-    // Send with send-to-device messaging
-    var data = <String, Map<String, Map<String, dynamic>>>{};
-    data =
-        await encryption.encryptToDeviceMessage(deviceKeys, eventType, message);
-    eventType = EventTypes.Encrypted;
-    await sendToDevice(
-        eventType, messageId ?? generateUniqueTransactionId(), data);
+    // So that we can guarantee order of encrypted to_device messages to be preserved we
+    // must ensure that we don't attempt to encrypt multiple concurrent to_device messages
+    // to the same device at the same time.
+    // A failure to do so can result in edge-cases where encryption and sending order of
+    // said to_device messages does not match up, resulting in an olm session corruption.
+    // As we send to multiple devices at the same time, we may only proceed here if the lock for
+    // *all* of them is freed and lock *all* of them while sending.
+
+    try {
+      await _sendToDeviceEncryptedLock.lock(deviceKeys);
+
+      // Send with send-to-device messaging
+      var data = <String, Map<String, Map<String, dynamic>>>{};
+      data = await encryption.encryptToDeviceMessage(
+          deviceKeys, eventType, message);
+      eventType = EventTypes.Encrypted;
+      await sendToDevice(
+          eventType, messageId ?? generateUniqueTransactionId(), data);
+    } finally {
+      _sendToDeviceEncryptedLock.unlock(deviceKeys);
+    }
   }
 
   /// Sends an encrypted [message] of this [type] to these [deviceKeys]. This request happens
