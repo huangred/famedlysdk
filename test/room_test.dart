@@ -768,6 +768,66 @@ void main() {
       expect(room.getState('m.room.message') != null, true);
     });
 
+    test('Spaces', () async {
+      expect(room.isSpace, false);
+      room.states['m.room.create'] = {
+        '': Event.fromJson({
+          'content': {'type': 'm.space'},
+          'event_id': '\$143273582443PhrSn:example.org',
+          'origin_server_ts': 1432735824653,
+          'room_id': '!jEsUZKDJdhlrceRyVU:example.org',
+          'sender': '@example:example.org',
+          'type': 'm.room.create',
+          'unsigned': {'age': 1234},
+          'state_key': '',
+        }, room, 1432735824653.0),
+      };
+      expect(room.isSpace, true);
+
+      expect(room.spaceParents.isEmpty, true);
+      room.states['m.space.parent'] = {
+        '!1234:example.invalid': Event.fromJson({
+          'content': {
+            'via': ['example.invalid']
+          },
+          'event_id': '\$143273582443PhrSn:example.org',
+          'origin_server_ts': 1432735824653,
+          'room_id': '!jEsUZKDJdhlrceRyVU:example.org',
+          'sender': '@example:example.org',
+          'type': 'm.space.parent',
+          'unsigned': {'age': 1234},
+          'state_key': '!1234:example.invalid',
+        }, room, 1432735824653.0),
+      };
+      expect(room.spaceParents.length, 1);
+
+      expect(room.spaceChildren.isEmpty, true);
+      room.states['m.space.child'] = {
+        '!1234:example.invalid': Event.fromJson({
+          'content': {
+            'via': ['example.invalid']
+          },
+          'event_id': '\$143273582443PhrSn:example.org',
+          'origin_server_ts': 1432735824653,
+          'room_id': '!jEsUZKDJdhlrceRyVU:example.org',
+          'sender': '@example:example.org',
+          'type': 'm.space.child',
+          'unsigned': {'age': 1234},
+          'state_key': '!1234:example.invalid',
+        }, room, 1432735824653.0),
+      };
+      expect(room.spaceChildren.length, 1);
+
+      // TODO: Implement a more generic fake api
+      /*await room.setSpaceChild(
+        '!jEsUZKDJdhlrceRyVU:example.org',
+        via: ['example.invalid'],
+        order: '5',
+        suggested: true,
+      );
+      await room.removeSpaceChild('!1234:example.invalid');*/
+    });
+
     test('logout', () async {
       await matrix.logout();
     });
